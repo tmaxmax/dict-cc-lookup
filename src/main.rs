@@ -32,10 +32,12 @@ fn main() -> anyhow::Result<()> {
     match query {
         query::Query::Gender(word) => gender_command(&word, iterator),
         query::Query::Meaning {
-            language: Language::German,
+            language,
             components,
             verbose: false,
-        } if components.len() == 1 => meaning_command(&components[0], iterator),
+        } if components.len() == 1 => {
+            meaning_command(&components[0], iterator, language == Language::English)
+        }
         _ => Err(anyhow!("unsupported query")),
     }
 }
@@ -68,12 +70,18 @@ fn gender_command(word: &str, iter: impl Iterator<Item = [String; 4]>) -> anyhow
     Err(anyhow!("not found"))
 }
 
-fn meaning_command(word: &str, iter: impl Iterator<Item = [String; 4]>) -> anyhow::Result<()> {
+fn meaning_command(
+    word: &str,
+    iter: impl Iterator<Item = [String; 4]>,
+    match_english: bool,
+) -> anyhow::Result<()> {
     for rec in iter {
         let german = Term::parse(&rec[0])?;
         let english = Term::parse(&rec[1])?;
 
-        if german.match_exact(word) {
+        if (!match_english && german.match_exact(word))
+            || (match_english && english.match_exact(word))
+        {
             println!("{} = {}", german, english);
         }
     }

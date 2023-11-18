@@ -2,15 +2,12 @@ use anyhow::anyhow;
 use colored::Colorize;
 use std::env;
 
-use dict_cc_lookup::query;
+use dict_cc_lookup::{
+    entry::Term,
+    query::{self, Language},
+};
 
 fn main() -> anyhow::Result<()> {
-    let query: query::Query = env::args().skip(1).collect::<Vec<String>>().try_into()?;
-    let word = match query {
-        query::Query::Gender(word) => word,
-        _ => return Err(anyhow!("unsupported query")),
-    };
-
     let dict_archive = zstd::stream::read::Decoder::new(&include_bytes!("dict.txt.zst")[..])?;
 
     let mut reader = csv::ReaderBuilder::new()
@@ -19,18 +16,33 @@ fn main() -> anyhow::Result<()> {
         .flexible(true)
         .from_reader(dict_archive);
 
-    for rec in reader.records() {
-        let cols: [_; 4] = match rec?
-            .into_iter()
-            .map(String::from)
-            .collect::<Vec<_>>()
-            .try_into()
-        {
-            Ok(cols) => cols,
-            Err(_) => continue,
-        };
+    let iterator = reader
+        .records()
+        .filter_map(|rec| rec.ok())
+        .filter_map(|rec| {
+            let cols: Result<[_; 4], _> = rec
+                .into_iter()
+                .map(String::from)
+                .collect::<Vec<_>>()
+                .try_into();
+            cols.ok()
+        });
 
-        let parts: Vec<_> = cols[0].split_whitespace().collect();
+    let query: query::Query = env::args().skip(1).collect::<Vec<String>>().try_into()?;
+    match query {
+        query::Query::Gender(word) => gender_command(&word, iterator),
+        query::Query::Meaning {
+            language: Language::German,
+            components,
+            verbose: false,
+        } if components.len() == 1 => meaning_command(&components[0], iterator),
+        _ => Err(anyhow!("unsupported query")),
+    }
+}
+
+fn gender_command(word: &str, iter: impl Iterator<Item = [String; 4]>) -> anyhow::Result<()> {
+    for rec in iter {
+        let parts: Vec<_> = rec[0].split_whitespace().collect();
         if parts.len() < 2 || !parts.iter().any(|&v| v == word) {
             continue;
         }
@@ -54,4 +66,17 @@ fn main() -> anyhow::Result<()> {
     }
 
     Err(anyhow!("not found"))
+}
+
+fn meaning_command(word: &str, iter: impl Iterator<Item = [String; 4]>) -> anyhow::Result<()> {
+    for rec in iter {
+        let german = Term::parse(&rec[0])?;
+        let english = Term::parse(&rec[1])?;
+
+        if german.match_exact(word) {
+            println!("{} = {}", german, english);
+        }
+    }
+
+    Ok(())
 }

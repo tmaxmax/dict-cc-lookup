@@ -8,13 +8,13 @@ use dict_cc_lookup::{
 };
 
 fn main() -> anyhow::Result<()> {
-    let dict_archive = zstd::stream::read::Decoder::new(&include_bytes!("dict.txt.zst")[..])?;
+    let dict = zstd::stream::read::Decoder::new(&include_bytes!("dict.txt.zst")[..])?;
 
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(false)
         .delimiter(b'\t')
         .flexible(true)
-        .from_reader(dict_archive);
+        .from_reader(dict);
 
     let iterator = reader
         .records()

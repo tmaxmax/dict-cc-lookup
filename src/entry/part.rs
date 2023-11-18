@@ -6,8 +6,8 @@ pub enum Part {
     Extra(Vec<Part>),         // In parantheses
     VariantSeparator,         // The character "/"
     Placeholder(Placeholder), // etw. jd. jdn. jdm. jds.
-    Annotation(Annotation), // Information inside [] (explanation) or <> (alternative), but not cases
-    Gender(Gender),         // {m} {n} {f} {pl}
+    Annotation(Annotation), // Information inside [] (explanation), <> (alternative), {} (numbers) but not cases
+    Gender(Gender),         // {m} {n} {f}
 }
 
 pub struct Parser<'a> {

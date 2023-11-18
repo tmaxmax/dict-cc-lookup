@@ -11,8 +11,8 @@ use dict_cc_lookup::{
 };
 
 fn main() -> anyhow::Result<()> {
-    let bytes = include_bytes!("dict.txt.zst");
-    let buf = BufReader::new(zstd::stream::read::Decoder::with_buffer(&bytes[..])?);
+    let dict = include_bytes!("dict.txt.zst");
+    let buf = BufReader::new(zstd::stream::read::Decoder::with_buffer(&dict[..])?);
 
     let query: query::Query = env::args().skip(1).collect::<Vec<String>>().try_into()?;
     match query {

@@ -1,99 +1,117 @@
 use anyhow::anyhow;
-use colored::Colorize;
-use std::env;
+use std::{
+    env,
+    io::{BufRead, BufReader},
+};
 
 use dict_cc_lookup::{
     entry::Term,
     query::{self, Language},
+    util,
 };
 
 fn main() -> anyhow::Result<()> {
-    let dict = zstd::stream::read::Decoder::new(&include_bytes!("dict.txt.zst")[..])?;
-
-    let mut reader = csv::ReaderBuilder::new()
-        .has_headers(false)
-        .delimiter(b'\t')
-        .flexible(true)
-        .from_reader(dict);
-
-    let iterator = reader
-        .records()
-        .filter_map(|rec| rec.ok())
-        .filter_map(|rec| {
-            let cols: Result<[_; 4], _> = rec
-                .into_iter()
-                .map(String::from)
-                .collect::<Vec<_>>()
-                .try_into();
-            cols.ok()
-        });
+    let bytes = include_bytes!("dict.txt.zst");
+    let buf = BufReader::new(zstd::stream::read::Decoder::with_buffer(&bytes[..])?);
 
     let query: query::Query = env::args().skip(1).collect::<Vec<String>>().try_into()?;
     match query {
-        query::Query::Gender(word) => gender_command(&word, iterator),
+        query::Query::Gender(word) => gender_command(&word, buf),
         query::Query::Meaning {
             language,
             components,
             verbose: false,
         } if components.len() == 1 => {
-            meaning_command(&components[0], iterator, language == Language::English)
+            meaning_command(&components[0], buf, language == Language::English)
         }
         _ => Err(anyhow!("unsupported query")),
     }
 }
 
-fn gender_command(word: &str, iter: impl Iterator<Item = [String; 4]>) -> anyhow::Result<()> {
-    for rec in iter {
-        let parts: Vec<_> = rec[0].split_whitespace().collect();
-        if parts.len() < 2 || !parts.iter().any(|&v| v == word) {
+fn gender_command(word: &str, mut rd: impl BufRead) -> anyhow::Result<()> {
+    let mut buf = String::with_capacity(512);
+
+    loop {
+        buf.clear();
+        if rd.read_line(&mut buf)? == 0 {
+            return Err(anyhow!("not found"));
+        }
+
+        let input = match buf.split('\t').next() {
+            Some(i) => i,
+            None => continue,
+        };
+
+        let mut parts = input.split_ascii_whitespace();
+        if !parts.any(|v| v == word) {
             continue;
         }
 
-        let (gender_text, is_plural) = match *parts.last().unwrap() {
-            "{m}" => ("der".bright_blue(), false),
-            "{f}" => ("die".bright_magenta(), false),
-            "{n}" => ("das".bright_green(), false),
-            "{pl}" => ("die".bright_yellow(), true),
-            _ => continue,
+        let (gender_text, is_plural) = match input.split_ascii_whitespace().next_back().unwrap() {
+            "{m}" => ("der", false),
+            "{f}" => ("die", false),
+            "{n}" => ("das", false),
+            "{pl}" | "{pl.}" => ("die", true),
+            _ => {
+                continue;
+            }
         };
 
         print!(
             "{} {}{}",
-            gender_text.bold(),
+            gender_text,
             word,
             if is_plural { " (pl)" } else { "" }
         );
 
         return Ok(());
     }
-
-    Err(anyhow!("not found"))
 }
 
-fn meaning_command(
-    word: &str,
-    iter: impl Iterator<Item = [String; 4]>,
-    match_english: bool,
-) -> anyhow::Result<()> {
-    for rec in iter {
-        let german = Term::parse(&rec[0])?;
-        let english = Term::parse(&rec[1])?;
+fn meaning_command(word: &str, mut rd: impl BufRead, match_english: bool) -> anyhow::Result<()> {
+    let mut buf = String::with_capacity(512);
 
-        if (!match_english && german.match_exact(word))
-            || (match_english && english.match_exact(word))
-        {
-            println!(
-                "{} = {}{}",
-                german,
-                english,
-                if rec[2].is_empty() {
-                    "".to_string()
-                } else {
-                    format!("  [{}]", rec[2])
-                }
-            );
+    loop {
+        buf.clear();
+        if rd.read_line(&mut buf)? == 0 {
+            return Ok(());
         }
-    }
 
-    Ok(())
+        let mut components = buf.split('\t');
+        let german_input = match components.next() {
+            Some(i) => i,
+            None => continue,
+        };
+        let english_input = match components.next() {
+            Some(i) => i,
+            None => continue,
+        };
+
+        let maybe_match = (!match_english && util::case_fold_contains(german_input, word))
+            || (match_english && util::case_fold_contains(english_input, word));
+        if !maybe_match {
+            continue;
+        }
+
+        let german = Term::parse(german_input)?;
+        let english = Term::parse(english_input)?;
+        let exact_match = (!match_english && german.match_exact(word))
+            || (match_english && english.match_exact(word));
+        if !exact_match {
+            continue;
+        }
+
+        let grammar_info = components.next().unwrap();
+
+        println!(
+            "{} = {}{}",
+            german,
+            english,
+            if grammar_info.is_empty() {
+                "".to_string()
+            } else {
+                format!("  [{}]", grammar_info)
+            }
+        );
+    }
 }

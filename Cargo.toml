@@ -10,6 +10,4 @@ opt-level = 3
 
 [dependencies]
 anyhow = "1.0.71"
-colored = "2.0.4"
-csv = "1.2.2"
 zstd = { version = "0.13.0", default-features = false }

@@ -18,17 +18,19 @@ impl Term {
     }
 
     pub fn match_exact(&self, input: &str) -> bool {
-        let keyword: Vec<_> = self
-            .parts
-            .iter()
-            .filter_map(|p| match p {
-                Part::Keyword(w) => Some(w),
-                _ => None,
-            })
-            .collect();
+        let mut it = self.parts.iter().filter_map(|p| match p {
+            Part::Keyword(w) => Some(w),
+            _ => None,
+        });
+        let keyword = match it.next() {
+            Some(k) => k,
+            None => return false,
+        };
+        if it.next().is_some() {
+            return false;
+        }
 
-        keyword.len() == 1
-            && (keyword[0] == input || keyword[0].to_lowercase() == input.to_lowercase())
+        input.len() == keyword.len() && crate::util::case_fold_eq(input, keyword)
     }
 }
 

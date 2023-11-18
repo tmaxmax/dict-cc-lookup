@@ -82,7 +82,16 @@ fn meaning_command(
         if (!match_english && german.match_exact(word))
             || (match_english && english.match_exact(word))
         {
-            println!("{} = {}", german, english);
+            println!(
+                "{} = {}{}",
+                german,
+                english,
+                if rec[2].is_empty() {
+                    "".to_string()
+                } else {
+                    format!("  [{}]", rec[2])
+                }
+            );
         }
     }
 

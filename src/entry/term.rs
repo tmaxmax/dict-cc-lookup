@@ -1,4 +1,7 @@
-use std::fmt::{self, Display};
+use std::{
+    cmp::Ordering,
+    fmt::{self, Display},
+};
 
 use super::{
     part::{Parser, Part},
@@ -24,13 +27,24 @@ impl Term {
             })
             .collect();
 
-        keyword.len() == 1 && keyword[0] == input
+        keyword.len() == 1
+            && (keyword[0] == input || keyword[0].to_lowercase() == input.to_lowercase())
     }
 }
 
 impl Display for Term {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&format_parts(&self.parts))
+        let mut parts = self.parts.clone();
+        parts.sort_by(|a, b| {
+            if matches!(a, Part::Gender(_)) {
+                Ordering::Less
+            } else if matches!(b, Part::Gender(_)) {
+                Ordering::Greater
+            } else {
+                Ordering::Equal
+            }
+        });
+        f.write_str(&format_parts(&parts))
     }
 }
 
@@ -40,8 +54,8 @@ fn format_parts(parts: &[Part]) -> String {
         .filter_map(|p| match p {
             Part::Keyword(k) => Some(k.clone()),
             Part::Placeholder(ph) => Some(ph.to_string()),
-            Part::VariantSeparator => Some(" / ".to_string()),
-            Part::Gender(g) => Some(format!("({})", g)),
+            Part::VariantSeparator => Some("/".to_string()),
+            Part::Gender(g) => Some(g.to_string()),
             Part::Annotation(Annotation {
                 value,
                 kind: AnnotationKind::Number,

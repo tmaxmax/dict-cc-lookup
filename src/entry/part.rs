@@ -1,6 +1,6 @@
 use super::{Annotation, AnnotationKind, Case, Gender, Placeholder};
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Part {
     Keyword(String),          // Keywords
     Extra(Vec<Part>),         // In parantheses

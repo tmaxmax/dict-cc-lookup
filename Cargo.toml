@@ -13,4 +13,5 @@ panic = "abort"
 
 [dependencies]
 anyhow = "1.0.71"
+thiserror = "1.0.50"
 zstd = { version = "0.13.0", default-features = false }

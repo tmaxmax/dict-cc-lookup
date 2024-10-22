@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use std::{
     env,
-    io::{BufRead, BufReader},
+    io::{self, BufRead, BufReader, Write},
 };
 
 use dict_cc_lookup::{
@@ -27,6 +27,9 @@ fn main() -> anyhow::Result<()> {
             } if components.len() == 1 => {
                 meaning_command(&components[0], buf, language == Language::English)
             }
+            query::Query::Interactive {
+                language: query::Language::German,
+            } => interactive_command(buf),
             _ => Err(anyhow!("unsupported query")),
         },
         Err(_) => lex_command(buf),
@@ -154,5 +157,81 @@ fn lex_command(mut rd: impl BufRead) -> anyhow::Result<()> {
                 )
             });
         println!();
+    }
+}
+
+struct Entry {
+    german: Term,
+    english: Term,
+    grammar_info: String,
+}
+
+fn interactive_command(mut rd: impl BufRead) -> anyhow::Result<()> {
+    println!("dict.cc in command line");
+
+    let mut buf = String::with_capacity(512);
+    let mut entries = Vec::<Entry>::new();
+
+    loop {
+        buf.clear();
+        if rd.read_line(&mut buf)? == 0 {
+            break;
+        }
+
+        let mut components = buf.split('\t');
+        let Ok(german) = components
+            .next()
+            .ok_or_else(|| anyhow!("no german component"))
+            .and_then(Term::parse) else {
+                continue
+            };
+        let Ok(english) = components
+            .next()
+            .ok_or_else(|| anyhow!("no english component"))
+            .and_then(Term::parse) else {
+                continue
+            };
+        let Some(grammar_info) = components.next().map(|s| s.to_string()) else {
+            continue
+        };
+
+        entries.push(Entry {
+            german,
+            english,
+            grammar_info,
+        });
+    }
+
+    println!("Input German words:");
+
+    let mut stdin = io::stdin().lock();
+    let mut stdout = io::stdout().lock();
+
+    loop {
+        write!(stdout, "> ")?;
+        stdout.flush()?;
+
+        buf.clear();
+        if stdin.read_line(&mut buf)? == 0 {
+            return Ok(());
+        }
+
+        let matches = entries.iter().filter(|&e| e.german.match_exact(buf.trim()));
+
+        for entry in matches {
+            writeln!(
+                stdout,
+                "{} = {}{}",
+                entry.german,
+                entry.english,
+                if entry.grammar_info.is_empty() {
+                    "".to_string()
+                } else {
+                    format!("  [{}]", entry.grammar_info)
+                }
+            )?;
+        }
+
+        stdout.flush()?;
     }
 }

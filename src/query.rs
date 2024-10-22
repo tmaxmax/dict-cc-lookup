@@ -16,6 +16,9 @@ pub enum Query {
         components: Vec<String>,
         verbose: bool,
     },
+    Interactive {
+        language: Language,
+    },
 }
 
 impl TryFrom<Vec<String>> for Query {
@@ -27,8 +30,7 @@ impl TryFrom<Vec<String>> for Query {
         }
 
         let maybe_specifier = value.remove(0);
-
-        if value.is_empty() {
+        if value.is_empty() && maybe_specifier.to_lowercase() != "i" {
             return Ok(Query::Meaning {
                 language: Language::German,
                 components: maybe_specifier
@@ -49,6 +51,11 @@ impl TryFrom<Vec<String>> for Query {
             "dv" => (Language::German, true),
             "e" => (Language::English, false),
             "ev" => (Language::English, true),
+            "i" => {
+                return Ok(Query::Interactive {
+                    language: Language::German,
+                })
+            }
             _ => return Err(anyhow!("invalid query specifier \"{}\"", maybe_specifier)),
         };
 

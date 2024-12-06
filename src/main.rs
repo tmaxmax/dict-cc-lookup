@@ -33,7 +33,13 @@ fn main() -> anyhow::Result<()> {
             } => interactive_command(buf),
             _ => Err(anyhow!("unsupported query")),
         },
-        Err(_) => lex_command(buf),
+        Err(_) => {
+            if cfg!(debug_assertions) {
+                lex_command(buf)
+            } else {
+                interactive_command(buf)
+            }
+        }
     }
 }
 

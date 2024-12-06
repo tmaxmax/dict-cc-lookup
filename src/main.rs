@@ -230,8 +230,17 @@ fn interactive_command(mut rd: impl BufRead) -> anyhow::Result<()> {
 
             saved.sort_by(|(a, _), (b, _)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
+            let mut out = String::new();
+
             for (german, english) in saved {
-                writeln!(stdout, "{} = {}", german, english)?;
+                out.push_str(&format!("{} = {}\n", german, english));
+            }
+
+            if !out.is_empty() {
+                write!(stdout, "{}", out)?;
+                if let Err(e) = cli_clipboard::set_contents(out) {
+                    eprintln!("failed to copy to clipboard: {}", e);
+                }
             }
 
             return Ok(());

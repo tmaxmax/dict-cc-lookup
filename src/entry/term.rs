@@ -8,6 +8,7 @@ use super::{
     Annotation, AnnotationKind,
 };
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Term {
     parts: Vec<Part>,
 }
@@ -47,6 +48,30 @@ impl Display for Term {
             }
         });
         f.write_str(&format_parts(&parts))
+    }
+}
+
+impl std::cmp::PartialOrd for Term {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let keywords_self = self.parts.iter().filter(|p| matches!(p, Part::Keyword(_)));
+        let keywords_other = other.parts.iter().filter(|p| matches!(p, Part::Keyword(_)));
+
+        if let Some(res) = keywords_self.partial_cmp(keywords_other) {
+            if res != Ordering::Equal {
+                return Some(res);
+            }
+        }
+
+        let extra_self = self.parts.iter().filter(|p| matches!(p, Part::Extra(_)));
+        let extra_other = other.parts.iter().filter(|p| matches!(p, Part::Extra(_)));
+
+        if let Some(res) = extra_self.partial_cmp(extra_other) {
+            if res != Ordering::Equal {
+                return Some(res);
+            }
+        }
+
+        None
     }
 }
 

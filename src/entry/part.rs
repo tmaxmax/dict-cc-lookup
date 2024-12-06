@@ -1,4 +1,5 @@
 use super::{Annotation, AnnotationKind, Case, Gender, Placeholder};
+use std::cmp;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Part {
@@ -47,6 +48,27 @@ impl<'a> Parser<'a> {
 
     pub fn parse_parts(self) -> Result<Vec<Part>, anyhow::Error> {
         self.parse().map(|p| p.0)
+    }
+}
+
+impl cmp::PartialOrd for Part {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        use Part::*;
+
+        match (self, other) {
+            (Keyword(a), Keyword(b)) => {
+                let res = a.to_uppercase().cmp(&b.to_uppercase());
+                Some(if res != cmp::Ordering::Equal {
+                    res
+                } else {
+                    b.cmp(a)
+                })
+            }
+            (Extra(a), Extra(b)) => a.partial_cmp(b),
+            (VariantSeparator, VariantSeparator) => Some(cmp::Ordering::Equal),
+            (Gender(a), Gender(b)) => a.eq(b).then_some(cmp::Ordering::Equal),
+            _ => None,
+        }
     }
 }
 

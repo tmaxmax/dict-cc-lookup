@@ -1,5 +1,6 @@
 use anyhow::anyhow;
 use std::{
+    collections::HashMap,
     env,
     io::{self, BufRead, BufReader, Write},
 };
@@ -45,9 +46,8 @@ fn gender_command(word: &str, mut rd: impl BufRead) -> anyhow::Result<()> {
             return Err(anyhow!("not found"));
         }
 
-        let input = match buf.split('\t').next() {
-            Some(i) => i,
-            None => continue,
+        let Some(input) = buf.split('\t').next() else {
+            continue
         };
 
         let mut parts = input.split_ascii_whitespace();
@@ -60,9 +60,7 @@ fn gender_command(word: &str, mut rd: impl BufRead) -> anyhow::Result<()> {
             "{f}" => ("die", false),
             "{n}" => ("das", false),
             "{pl}" | "{pl.}" => ("die", true),
-            _ => {
-                continue;
-            }
+            _ => continue,
         };
 
         print!(
@@ -86,13 +84,11 @@ fn meaning_command(word: &str, mut rd: impl BufRead, match_english: bool) -> any
         }
 
         let mut components = buf.split('\t');
-        let german_input = match components.next() {
-            Some(i) => i,
-            None => continue,
+        let Some(german_input) = components.next() else {
+            continue
         };
-        let english_input = match components.next() {
-            Some(i) => i,
-            None => continue,
+        let Some(english_input) = components.next() else {
+            continue
         };
 
         let maybe_match = (!match_english && util::case_fold_contains(german_input, word))
@@ -160,6 +156,7 @@ fn lex_command(mut rd: impl BufRead) -> anyhow::Result<()> {
     }
 }
 
+#[derive(Debug, Clone)]
 struct Entry {
     german: Term,
     english: Term,
@@ -207,21 +204,71 @@ fn interactive_command(mut rd: impl BufRead) -> anyhow::Result<()> {
     let mut stdin = io::stdin().lock();
     let mut stdout = io::stdout().lock();
 
+    let mut matches = Vec::<Entry>::new();
+    let mut saved_words = HashMap::<Term, Vec<Term>>::new();
+
     loop {
         write!(stdout, "> ")?;
         stdout.flush()?;
 
         buf.clear();
         if stdin.read_line(&mut buf)? == 0 {
+            writeln!(stdout)?;
+
+            let mut saved = saved_words
+                .into_iter()
+                .map(|(german, mut english)| {
+                    english.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                    let eng = english
+                        .into_iter()
+                        .map(|e| e.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    (german, eng)
+                })
+                .collect::<Vec<_>>();
+
+            saved.sort_by(|(a, _), (b, _)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+            for (german, english) in saved {
+                writeln!(stdout, "{} = {}", german, english)?;
+            }
+
             return Ok(());
         }
 
-        let matches = entries.iter().filter(|&e| e.german.match_exact(buf.trim()));
+        if buf
+            .chars()
+            .all(|c| c.is_ascii_digit() || c.is_ascii_whitespace())
+        {
+            for entry in buf
+                .split_ascii_whitespace()
+                .filter_map(|s| s.parse::<usize>().ok())
+                .filter_map(|i| matches.get(i).cloned())
+            {
+                if let Some(terms) = saved_words.get_mut(&entry.german) {
+                    if !terms.contains(&entry.english) {
+                        terms.push(entry.english);
+                    }
+                } else {
+                    saved_words.insert(entry.german, vec![entry.english]);
+                }
+            }
 
-        for entry in matches {
+            continue;
+        }
+
+        matches = entries
+            .iter()
+            .filter(|e| e.german.match_exact(buf.trim()))
+            .cloned()
+            .collect();
+
+        for (i, entry) in matches.iter().enumerate() {
             writeln!(
                 stdout,
-                "{} = {}{}",
+                "{: >3}. {} = {}{}",
+                i,
                 entry.german,
                 entry.english,
                 if entry.grammar_info.is_empty() {

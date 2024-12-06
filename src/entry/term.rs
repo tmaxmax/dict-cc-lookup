@@ -76,20 +76,26 @@ impl std::cmp::PartialOrd for Term {
 }
 
 fn format_parts(parts: &[Part]) -> String {
-    parts
-        .iter()
-        .filter_map(|p| match p {
-            Part::Keyword(k) => Some(k.clone()),
-            Part::Placeholder(ph) => Some(ph.to_string()),
-            Part::VariantSeparator => Some("/".to_string()),
-            Part::Gender(g) => Some(g.to_string()),
-            Part::Annotation(Annotation {
-                value,
-                kind: AnnotationKind::Number,
-            }) => Some(format!("[{}]", value)),
-            Part::Extra(ps) => Some("(".to_string() + &format_parts(ps) + ")"),
-            _ => None,
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
+    let mut out = String::new();
+
+    for p in parts.iter().filter_map(|p| match p {
+        Part::Keyword(k) => Some(k.clone()),
+        Part::Placeholder(ph) => Some(ph.to_string()),
+        Part::VariantSeparator => Some("/".to_string()),
+        Part::Gender(g) => Some(g.to_string()),
+        Part::Annotation(Annotation {
+            value,
+            kind: AnnotationKind::Number,
+        }) => Some(format!("[{}]", value)),
+        Part::Extra(ps) => Some("(".to_string() + &format_parts(ps) + ")"),
+        _ => None,
+    }) {
+        if !out.is_empty() && !out.ends_with("/") && p != "/" {
+            out.push_str(" ");
+        }
+
+        out.push_str(&p);
+    }
+
+    out
 }
